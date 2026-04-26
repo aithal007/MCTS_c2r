@@ -23,6 +23,8 @@ class LAC2RConfig:
     max_depth: int = 5
     w_reward: float = 2.0
     root_branching: int = 4
+    simulation_depth: int = 0
+    p_no_feedback_expand: float = 0.0
     require_tests: bool = True
     write_best: bool = False
 
@@ -68,6 +70,8 @@ def run_lac2r_refine(cfg: LAC2RConfig) -> Dict[str, Any]:
         max_depth=cfg.max_depth,
         w_reward=cfg.w_reward,
         root_branching=cfg.root_branching,
+        simulation_depth=cfg.simulation_depth,
+        p_no_feedback_expand=cfg.p_no_feedback_expand,
     )
     root = run_mcts(
         cfg.file_path,

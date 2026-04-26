@@ -13,8 +13,9 @@ from .safety_reward import (
     compile_score_C,
     node_reward_R,
 )
-from .mcts import MCTSHyper, run_mcts
+from .mcts import LAC2RMCTSEngine, MCTSHyper, MCTSNode, run_mcts
 from .service import LAC2RConfig, find_best_solution, run_lac2r_refine
+from .rl_bridge import lac2r_shaping_add
 
 __all__ = [
     "UnsafeConstructCounts",
@@ -25,6 +26,9 @@ __all__ = [
     "LAC2RConfig",
     "find_best_solution",
     "run_lac2r_refine",
+    "LAC2RMCTSEngine",
     "MCTSHyper",
+    "MCTSNode",
     "run_mcts",
+    "lac2r_shaping_add",
 ]

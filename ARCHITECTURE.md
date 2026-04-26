@@ -113,14 +113,16 @@ Existing OpenEnv endpoints **`/reset`**, **`/step`**, **`/train/*`** are unchang
 
 ---
 
-## 8. Relationship to upstream CRust
+## 8. Relationship to upstream CRust (unified hackathon model)
 
 | Layer | Role |
 |-------|------|
-| `env.py`, `scheduler.py`, `verifier.py`, `metrics.py` | Original **RL / curriculum / GRPO** environment and rewards. |
-| `lac2r/*` | **Search-based multi-trajectory** refinement on a single file using the same verifier. |
+| `env.py`, `scheduler.py`, `verifier.py`, `metrics.py` | **RL / OpenEnv** — `reset` / `step` rewards for GRPO (`trainer_daemon.py` + `POST /train/start`). |
+| `lac2r/rl_bridge.py` | Optional **LAC2R shaping** on `step`: if `CRUST_LAC2R_REWARD=1`, add `CRUST_LAC2R_WEIGHT * S(r)` (paper Eq. 3) so GRPO chases both CRust *and* five-category safety. |
+| `lac2r/mcts.py` | **Full MCTS** class `LAC2RMCTSEngine`: UCT `Select` → `Expand` (Alg. 2, INIT+heterogeneous GEN, feedback/no-feedback) → **greedy** `Simulate` (virtual fix chain, `simulation_depth`) → `Backprop`. |
+| `lac2r/service.py` + `POST /lac2r/refine` | Interactive **MCTS+LLM** on one file; does not replace the RL loop. |
 
-Both can coexist: train with GRPO, or run batch refinement with MCTS+LLM.
+**Training:** `POST /train/start` (GRPO) uses `env.step` → with `CRUST_LAC2R_REWARD=1` the same safety ratio as the paper nudges the policy. **Refinement:** `POST /lac2r/refine` runs the tree search (optional API key for real LLM; mock offline).
 
 ---
 

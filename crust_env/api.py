@@ -91,6 +91,14 @@ class LAC2RRequest(BaseModel):
     uct_c: float = Field(default=1.5, ge=0.0, le=10.0)
     w_reward: float = Field(default=2.0, ge=0.0, le=20.0)
     root_branching: int = Field(default=4, ge=1, le=8)
+    simulation_depth: int = Field(
+        default=0, ge=0, le=10,
+        description="Greedy virtual sim steps after expand (paper Rollout; 0=off to save LLM).",
+    )
+    p_no_feedback_expand: float = Field(
+        default=0.0, ge=0.0, le=1.0,
+        description="Prob. of (null, LLM) no-feedback child on GEN (paper §2.3).",
+    )
     require_tests: bool = Field(default=True)
     write_best: bool = Field(
         default=False,
@@ -190,6 +198,8 @@ def lac2r_refine(request: LAC2RRequest = LAC2RRequest()) -> Dict[str, Any]:
         uct_c=request.uct_c,
         w_reward=request.w_reward,
         root_branching=request.root_branching,
+        simulation_depth=request.simulation_depth,
+        p_no_feedback_expand=request.p_no_feedback_expand,
         require_tests=request.require_tests,
         write_best=request.write_best,
     )
@@ -228,6 +238,11 @@ def env_info() -> Dict[str, Any]:
             "CBO violation penalty (−0.20)",
             "Max step limit (200 steps per episode)",
         ],
+        "lac2r_rl_shaping": {
+            "env_var_enable": "CRUST_LAC2R_REWARD=1",
+            "weight_var": "CRUST_LAC2R_WEIGHT (default 0.06)",
+            "effect": "Adds LAC2R safety S(r) bonus to env.step() reward (paper Eq. 3).",
+        },
     }
 
 

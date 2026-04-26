@@ -16,6 +16,7 @@ import re
 from .verifier import CRustVerifier
 from .scheduler import CDependencyGraph
 from .metrics import ModularityMetrics
+from .lac2r.rl_bridge import lac2r_shaping_add
 
 # ── OpenEnv base class (pip install openenv-core) ─────────────────────────────
 # We inherit from the official openenv.core Environment base class so that
@@ -85,6 +86,8 @@ class MigrationEnv(_OpenEnvBase):
         self._translated: Dict[str, str] = {} # fname → rust code (already done)
         self._error_history: List[Dict] = []  # recent compiler diagnostics
         self._prev_error_count: int = 0       # for process supervision delta
+        # LAC2R (paper) safety ratio shaping vs. baseline Rust at file start
+        self._lac2r_baseline: Dict[str, str] = {}
 
     # ── OpenEnv Interface ─────────────────────────────────────────────────
 
@@ -127,6 +130,8 @@ class MigrationEnv(_OpenEnvBase):
             self._schedule = full_schedule        # full repository
 
         self._current_idx = 0
+        self._lac2r_baseline = {}
+        self._cache_lac2r_baseline_for_current()
 
         self._current_state = {
             "status": "ready",
@@ -187,8 +192,14 @@ class MigrationEnv(_OpenEnvBase):
         metrics = ModularityMetrics.evaluate(code_content)
         self._current_state["metrics"] = metrics
 
-        # ── Step 3: Compute multi-objective reward ─────────────────────────
+        # ── Step 3: Compute multi-objective reward + optional LAC2R shaping (paper Eq.3)
+        self._ensure_lac2r_baseline(file_path)
+        b_r0 = self._lac2r_baseline.get(file_path, code_content)
         reward, breakdown = self._compute_reward(code_content, verification, metrics)
+        lac_bonus, lac_dict = lac2r_shaping_add(code_content, b_r0, verification)
+        if lac_dict:
+            breakdown.update(lac_dict)
+        reward = min(0.99, reward + lac_bonus)
 
         # ── Step 4: Process supervision — reward clearing compiler errors ──
         current_errors = [
@@ -208,6 +219,7 @@ class MigrationEnv(_OpenEnvBase):
         if success:
             self._translated[file_path] = code_content
             self._current_idx += 1
+            self._cache_lac2r_baseline_for_current()
             self._current_state["files_done"] = self._current_idx
             self._current_state["translated_files"] = list(self._translated.keys())
 
@@ -268,6 +280,33 @@ class MigrationEnv(_OpenEnvBase):
         if self._current_idx < len(self._schedule):
             return self._schedule[self._current_idx]
         return None
+
+    def _c_to_rs_path(self, c_file: str) -> str:
+        return "src/" + re.sub(r"\.c$", ".rs", os.path.basename(c_file))
+
+    def _cache_lac2r_baseline_for_current(self) -> None:
+        target = self._get_current_target()
+        if not target:
+            return
+        rs = self._c_to_rs_path(target)
+        p = os.path.join(self.workspace_dir, rs)
+        if os.path.isfile(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    self._lac2r_baseline[rs] = f.read()
+            except OSError:
+                pass
+
+    def _ensure_lac2r_baseline(self, file_path: str) -> None:
+        if file_path in self._lac2r_baseline:
+            return
+        p = os.path.join(self.workspace_dir, file_path)
+        if os.path.isfile(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    self._lac2r_baseline[file_path] = f.read()
+            except OSError:
+                pass
 
     def _read_c_source(self, filename: str) -> str:
         """Locate and read the C source file from the legacy directory."""

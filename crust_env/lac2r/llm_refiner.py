@@ -167,3 +167,20 @@ class LLMRefiner:
         out = _extract_func(text)
         session.add_assistant(out)
         return out
+
+    def continue_refinement_without_feedback(
+        self, session: RefineSession, current_code: str, *, variant: int = 0
+    ) -> str:
+        """
+        Paper: action (null, LLM_k) — refinement without explicit validator string.
+        Drives diversity when compile/test feedback is uninformative.
+        """
+        session.add_user(
+            "Propose a safer, more idiomatic version of the Rust above without repeating "
+            "the same structure. Use <FUNC> </FUNC> only. Keep public API and semantics."
+        )
+        model = self.cfg.model_cheap if variant % 2 == 0 else self.cfg.model_strong
+        text = self._complete(model, session)
+        out = _extract_func(text)
+        session.add_assistant(out)
+        return out
